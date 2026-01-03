@@ -20,8 +20,8 @@ using var metricsProvider = Sdk.CreateMeterProviderBuilder()
     .Build();
 using var loggerFactory = LoggerFactory.Create(builder => builder.AddOpenTelemetry(opt => opt.AddOtlpExporter()));
 
-// Connect to an MCP server
-Console.WriteLine("Connecting client to MCP 'everything' server");
+// Connect to MCP servers
+Console.WriteLine("Connecting client to MCP 'everything' server and windows-theme-toggle server");
 
 // Create OpenAI client (or any other compatible with IChatClient)
 // Provide your own OPENAI_API_KEY via an environment variable.
@@ -33,7 +33,8 @@ using IChatClient samplingClient = openAIClient.AsIChatClient()
     .UseOpenTelemetry(loggerFactory: loggerFactory, configure: o => o.EnableSensitiveData = true)
     .Build();
 
-var mcpClient = await McpClient.CreateAsync(
+// "everything" MCP server
+var everythingClient = await McpClient.CreateAsync(
     new StdioClientTransport(new()
     {
         Command = "npx",
@@ -49,9 +50,28 @@ var mcpClient = await McpClient.CreateAsync(
     },
     loggerFactory: loggerFactory);
 
+// Local windows-theme-toggle MCP server (stdio)
+var themeToggleClient = await McpClient.CreateAsync(
+    new StdioClientTransport(new()
+    {
+        Command = "c:\\Users\\t-ste\\Documents\\GitHub\\2025-winter-break\\python-mcp-playing\\.venv\\Scripts\\python.exe",
+        Arguments = ["c:\\Users\\t-ste\\Documents\\GitHub\\2025-winter-break\\python-mcp-playing\\src\\theme_toggle_server.py"],
+        Name = "WindowsThemeToggle",
+    }),
+    clientOptions: new()
+    {
+        Handlers = new()
+        {
+            SamplingHandler = samplingClient.CreateSamplingHandler()
+        }
+    },
+    loggerFactory: loggerFactory);
+
 // Get all available tools
-Console.WriteLine("Tools available:");
-var tools = await mcpClient.ListToolsAsync();
+Console.WriteLine("Tools available (from all servers):");
+var toolsEverything = await everythingClient.ListToolsAsync();
+var toolsThemeToggle = await themeToggleClient.ListToolsAsync();
+var tools = toolsEverything.Concat(toolsThemeToggle).ToList();
 foreach (var tool in tools)
 {
     Console.WriteLine($"  {tool}");
